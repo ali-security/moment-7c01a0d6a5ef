@@ -996,6 +996,123 @@ test('when in strict mode with inexact parsing, treat periods in min-weekdays li
     assert.equal(moment('thurs', 'dd', true).format('dddd'), 'Thursday');
 });
 
+test('locale names that look like file system paths are never required', function (assert) {
+    var vectors = [
+            {
+                name: 'moment.locale',
+                load: function (name) {
+                    moment.locale(name);
+                    assert.equal(
+                        moment.locale(),
+                        'en',
+                        'moment.locale(' + name + ') keeps the global locale'
+                    );
+                },
+            },
+            {
+                name: 'moment.localeData',
+                load: function (name) {
+                    assert.equal(
+                        moment.localeData(name),
+                        moment.localeData(),
+                        'moment.localeData(' + name + ') is the global locale'
+                    );
+                },
+            },
+            {
+                name: 'moment#locale',
+                load: function (name) {
+                    assert.equal(
+                        moment().locale(name).locale(),
+                        'en',
+                        'moment#locale(' + name + ') keeps the locale'
+                    );
+                },
+            },
+            {
+                name: 'moment(input, format, locale)',
+                load: function (name) {
+                    assert.equal(
+                        moment('2020-01-01', 'YYYY-MM-DD', name).locale(),
+                        'en',
+                        'moment(..., ' + name + ') uses the global locale'
+                    );
+                },
+            },
+            {
+                name: 'moment.defineLocale parentLocale',
+                load: function (name) {
+                    assert.equal(
+                        moment.defineLocale('path-like-parent-child', {
+                            parentLocale: name,
+                        }),
+                        null,
+                        'child of parentLocale ' + name + ' is not defined'
+                    );
+                },
+            },
+        ],
+        localeCount;
+
+    function isDefined(name) {
+        return !!~indexOf.call(moment.locales(), name);
+    }
+
+    function repeat(str, times) {
+        return new Array(times + 1).join(str);
+    }
+
+    function assertNotRequired(vectorName, name, load) {
+        localeCount = moment.locales().length;
+        load(name);
+        assert.ok(!isDefined(name), vectorName + ' does not require ' + name);
+        assert.equal(
+            moment.locales().length,
+            localeCount,
+            vectorName + ' loads no locale for ' + name
+        );
+    }
+
+    // A distinct name per vector, so every vector would reach require() on
+    // its own: a failed require() records the name as a (null) locale.
+    each(vectors, function (vector, i) {
+        each(
+            [
+                '/etc/' + repeat('./', i) + 'passwd',
+                './' + repeat('../', 10 + i) + 'etc/passwd',
+                repeat('..\\', 3 + i) + 'etc\\passwd',
+            ],
+            function (name) {
+                assertNotRequired(vector.name, name, vector.load);
+            }
+        );
+    });
+
+    // Resolvable traversals out of the locale directory: requiring them
+    // would define new locales.
+    assertNotRequired('moment.updateLocale', '../locale/yo', function (name) {
+        moment.updateLocale(name, {});
+        moment.updateLocale(name, null);
+        moment.locale('en');
+    });
+    each(vectors, function (vector) {
+        assertNotRequired(vector.name, '../min/locales', vector.load);
+    });
+
+    // sane locale names are still looked up and lazy loaded
+    moment.locale('sanebutmissinglocale');
+    assert.ok(
+        isDefined('sanebutmissinglocale'),
+        'a sane locale name still reaches require()'
+    );
+    moment.defineLocale('sanebutmissinglocale', null);
+    assert.equal(moment.locale('fr'), 'fr', 'fr is still loaded');
+    assert.equal(moment.locale('yo'), 'yo', 'yo is lazy loaded');
+    assert.ok(isDefined('yo'), 'yo is defined');
+
+    moment.locale('en');
+});
+
 // TODO: Enable this after fixing pl months parse hack hack
 // test('monthsParseExact', function (assert) {
 //     var locale = 'test-months-parse-exact';
