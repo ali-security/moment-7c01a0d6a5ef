@@ -1,0 +1,47 @@
+name: seal-build
+
+# Build-and-pack only: the test suite runs on Travis (.travis.yml).
+on:
+  workflow_dispatch:
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # the public 2.29.1 tarball was packed with Node 14.2.0 / npm 6.14.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '14.2.0'
+
+      - name: Install dependencies (package-lock.json)
+        run: npm ci --ignore-scripts
+
+      # Gruntfile "release" minus its "default" (lint + test) step: rebuild
+      # moment.js, locale/, dist/ and min/* from src/
+      - name: Rebuild bundles from src/
+        run: ./node_modules/.bin/grunt transpile update-index component uglify:main
+
+      - name: Stage npm package
+        run: bash scripts/npm_prepublish.sh
+
+      - name: Pack
+        run: |
+          npm install -g npm@6.14.5
+          mkdir -p seal-dist
+          cd seal-dist
+          npm pack ../output_build/
+
+      - name: Check shipped bundles carry the src/ fixes
+        run: |
+          mkdir -p "$RUNNER_TEMP/pkgcheck"
+          tar -xzf seal-dist/*.tgz -C "$RUNNER_TEMP/pkgcheck"
+          node scripts/seal_check_bundles.js "$RUNNER_TEMP/pkgcheck/package"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moment-npm
+          path: seal-dist/*.tgz
+          if-no-files-found: error

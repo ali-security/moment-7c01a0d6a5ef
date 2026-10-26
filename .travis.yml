@@ -1,23 +1,30 @@
 language: node_js
 node_js:
-  - "node"
+  - "14" # "node" at release time (2020-10-06) was Node 14
   - "12"
   - "10"
   - "8"
 sudo: false
+
+dist: bionic # Ubuntu 18.04 for Node.js compatibility and GLIBC dependency
 
 env:
   global:
     - secure: "M4STT2TOZxjzv3cZOgSVi0J4j6enrGjgE+p5YTNUw+S6Dg6FS5pTIPeafu1kGhfm7F0uk7xPVwGKYb+3uWNO9IhkKXz8jySMMQ2iKISHwECGNNuFNjSMD1vIjbIkLwV8TyPO/PurQg2s+WtYz+DoAZsDFKpdaRUtif64OjdQ3vQ="
     - secure: "V+i7kHoGe7VXWGplPNqJz+aDtgDF9Dh9/guoaf2BPyXLvkFW6VgMjJyoNUW7JVsakrWzAz2ubb734vAPDt7BCcFQ2BqfatOmabdFogviCaXC6IqVaEkYS2eSP7MIUPIeWJgnTrDGzkFMDk4K7y5SiVJ8UmYwZxe+tJV7kbb0Yig="
 
-before_install: if [[ `npm -v` == 2* ]]; then npm i -g npm@3; fi
+# resolve npm installs as of the 2.29.1 release date (registry time machine)
+before_install:
+  - npm config set registry https://:2020-10-06T11%3A21%3A28.627Z@time-machines-npm.sealsecurity.io/
+  - if [[ `npm -v` == 2* ]]; then npm i -g npm@3; fi
 
+# using npm ci instead of npm install to enforce package-lock.json
 install:
-  - npm install
-  - npm install -g grunt-cli
+  - npm ci
+  - npm install -g grunt-cli@1.3.2
 
-script: grunt build:travis
+# grunt build:travis = lint + coveralls upload (needs the upstream token); run the test suite instead
+script: grunt test
 
 git:
   depth: 10
